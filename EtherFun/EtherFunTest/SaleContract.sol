@@ -3,15 +3,18 @@ pragma solidity >=0.8.19;
 
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import { UD60x18, ud } from "@prb/math/src/UD60x18.sol";  // Use UD60x18 type and ud() constructor
-
+import {UD60x18, ud} from "@prb/math/src/UD60x18.sol"; // Use UD60x18 type and ud() constructor
 
 interface IVistaFactory {
-    function getPair(address tokenA, address tokenB) external view returns (address);
+    function getPair(
+        address tokenA,
+        address tokenB
+    ) external view returns (address);
 }
 
 interface IPair {
     function claimShare() external;
+
     function viewShare() external view returns (uint256 share);
 }
 
@@ -51,7 +54,8 @@ contract EtherfunSale is ReentrancyGuard, ERC20 {
     mapping(address => bool) public isTokenHolder;
 
     address public wethAddress = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address public vistaFactoryAddress = 0x9a27cb5ae0B2cEe0bb71f9A85C0D60f3920757B4;
+    address public vistaFactoryAddress =
+        0x9a27cb5ae0B2cEe0bb71f9A85C0D60f3920757B4;
     uint256 public feePercent;
     address public feeWallet = 0xc07DFf4C8c129aA8FA8b91CC67d74AEd77e4feF1;
 
@@ -67,14 +71,13 @@ contract EtherfunSale is ReentrancyGuard, ERC20 {
         uint256 tokenAmount,
         uint256 timestamp
     );
-    
+
     event TokensSold(
         address indexed seller,
         uint256 tokenAmount,
         uint256 ethAmount,
         uint256 timestamp
     );
-
 
     modifier onlyFactory() {
         require(msg.sender == factory, "Only factory");
@@ -109,17 +112,23 @@ contract EtherfunSale is ReentrancyGuard, ERC20 {
         //token = address(newToken);
     }
 
+    // Function to calculate the amount of ETH for a given token amount
     function getEthIn(uint256 tokenAmount) public view returns (uint256) {
+        // 將 tokensSold 轉換為 UD60x18 類型的固定小數點數值。UD60x18 是一種表示固定小數點數值的數據類型，通常用於高精度的數學計算。
         UD60x18 soldTokensFixed = ud(tokensSold);
         UD60x18 tokenAmountFixed = ud(tokenAmount);
         UD60x18 kFixed = ud(k);
         UD60x18 alphaFixed = ud(alpha);
 
         // Calculate ethBefore = k * (exp(alpha * tokensSold) - 1)
-        UD60x18 ethBefore = kFixed.mul(alphaFixed.mul(soldTokensFixed).exp()).sub(kFixed);
+        UD60x18 ethBefore = kFixed
+            .mul(alphaFixed.mul(soldTokensFixed).exp())
+            .sub(kFixed);
 
         // Calculate ethAfter = k * (exp(alpha * (tokensSold - tokenAmount)) - 1)
-        UD60x18 ethAfter = kFixed.mul(alphaFixed.mul(soldTokensFixed.sub(tokenAmountFixed)).exp()).sub(kFixed);
+        UD60x18 ethAfter = kFixed
+            .mul(alphaFixed.mul(soldTokensFixed.sub(tokenAmountFixed)).exp())
+            .sub(kFixed);
 
         // Return the difference in Wei (ETH)
         return ethBefore.sub(ethAfter).unwrap();
@@ -133,19 +142,34 @@ contract EtherfunSale is ReentrancyGuard, ERC20 {
         UD60x18 alphaFixed = ud(alpha);
 
         // Calculate tokensBefore = ln((totalRaised / k) + 1) / alpha
-        UD60x18 tokensBefore = totalRaisedFixed.div(kFixed).add(ud(1e18)).ln().div(alphaFixed);
+        UD60x18 tokensBefore = totalRaisedFixed
+            .div(kFixed)
+            .add(ud(1e18))
+            .ln()
+            .div(alphaFixed);
 
         // Calculate tokensAfter = ln(((totalRaised + ethAmount) / k) + 1) / alpha
-        UD60x18 tokensAfter = totalRaisedFixed.add(ethAmountFixed).div(kFixed).add(ud(1e18)).ln().div(alphaFixed);
+        UD60x18 tokensAfter = totalRaisedFixed
+            .add(ethAmountFixed)
+            .div(kFixed)
+            .add(ud(1e18))
+            .ln()
+            .div(alphaFixed);
 
         // Return the difference in tokens
         return tokensAfter.sub(tokensBefore).unwrap();
     }
 
     // Optimized buy function with direct fee distribution
-    function buy(address user, uint256 minTokensOut) external payable onlyFactory nonReentrant returns (uint256, uint256) {
+    function buy(
+        address user,
+        uint256 minTokensOut
+    ) external payable onlyFactory nonReentrant returns (uint256, uint256) {
         require(!launched, "Sale already launched");
-        require(totalRaised + msg.value <= saleGoal + 0.1 ether, "Sale goal reached");
+        require(
+            totalRaised + msg.value <= saleGoal + 0.1 ether,
+            "Sale goal reached"
+        );
         require(msg.value > 0, "No ETH sent");
         require(!status, "bonded");
 
@@ -155,7 +179,10 @@ contract EtherfunSale is ReentrancyGuard, ERC20 {
 
         // Calculate tokens to buy with amountAfterFee
         uint256 tokensToBuy = getTokenIn(amountAfterFee);
-        require(tokensToBuy >= minTokensOut, "Slippage too high, transaction reverted");
+        require(
+            tokensToBuy >= minTokensOut,
+            "Slippage too high, transaction reverted"
+        );
 
         tokensSold += tokensToBuy;
         totalRaised += amountAfterFee;
@@ -187,15 +214,28 @@ contract EtherfunSale is ReentrancyGuard, ERC20 {
     }
 
     // Optimized sell function with direct fee distribution
-    function sell(address user, uint256 tokenAmount, uint256 minEthOut) external onlyFactory nonReentrant returns (uint256, uint256) {
+    function sell(
+        address user,
+        uint256 tokenAmount,
+        uint256 minEthOut
+    ) external onlyFactory nonReentrant returns (uint256, uint256) {
         require(!launched, "Sale already launched");
         require(tokenAmount > 0, "Token amount must be greater than 0");
-        require(tokenBalances[user] >= tokenAmount, "Insufficient token balance");
+        require(
+            tokenBalances[user] >= tokenAmount,
+            "Insufficient token balance"
+        );
         require(!status, "bonded");
 
         uint256 ethToReturn = getEthIn(tokenAmount);
-        require(ethToReturn >= minEthOut, "Slippage too high, transaction reverted");
-        require(ethToReturn <= address(this).balance, "Insufficient contract balance");
+        require(
+            ethToReturn >= minEthOut,
+            "Slippage too high, transaction reverted"
+        );
+        require(
+            ethToReturn <= address(this).balance,
+            "Insufficient contract balance"
+        );
 
         // Calculate the fee and amount after fee deduction
         uint256 fee = (ethToReturn * feePercent) / 100;
@@ -211,25 +251,21 @@ contract EtherfunSale is ReentrancyGuard, ERC20 {
 
         payable(feeWallet).transfer(fee / 2);
         payable(0x4C5fbF8D815379379b3695ba77B5D3f898C1230b).transfer(fee / 2);
-    
 
         updateHistoricalData();
 
-        emit TokensSold(
-            user,
-            tokenAmount,
-            ethAfterFee,
-            block.timestamp
-        );
+        emit TokensSold(user, tokenAmount, ethAfterFee, block.timestamp);
 
         return (totalRaised, tokenBalances[user]);
     }
 
     function updateHistoricalData() internal {
-        historicalData.push(HistoricalData({
-            timestamp: block.timestamp,
-            totalRaised: totalRaised
-        }));
+        historicalData.push(
+            HistoricalData({
+                timestamp: block.timestamp,
+                totalRaised: totalRaised
+            })
+        );
         //emit HistoricalDataUpdated(block.timestamp, totalRaised);
     }
 
@@ -255,7 +291,6 @@ contract EtherfunSale is ReentrancyGuard, ERC20 {
 
         _approve(address(this), _launchContract, tokenAmount);
 
-
         ILaunchContract(_launchContract).launch{value: launchEthAmount}(
             address(this),
             tokenAmount,
@@ -271,10 +306,8 @@ contract EtherfunSale is ReentrancyGuard, ERC20 {
         uint256 creatorShareAmount = address(this).balance;
         require(creatorShareAmount > 0, "No balance for creator share");
 
-        payable(firstBuyer).transfer(creatorShareAmount/2);
-        payable(saleInitiator).transfer(creatorShareAmount/2);
-        
-
+        payable(firstBuyer).transfer(creatorShareAmount / 2);
+        payable(saleInitiator).transfer(creatorShareAmount / 2);
     }
 
     // Claim tokens after the sale is launched
@@ -296,11 +329,17 @@ contract EtherfunSale is ReentrancyGuard, ERC20 {
         return tokenHolders;
     }
 
-    function getAllHistoricalData() external view returns (HistoricalData[] memory) {
+    function getAllHistoricalData()
+        external
+        view
+        returns (HistoricalData[] memory)
+    {
         return historicalData;
     }
 
-    function takeFee(address lockFactoryOwner) external onlyFactory nonReentrant {
+    function takeFee(
+        address lockFactoryOwner
+    ) external onlyFactory nonReentrant {
         IVistaFactory vistaFactory = IVistaFactory(vistaFactoryAddress);
         address pairAddress = vistaFactory.getPair(address(this), wethAddress);
 
@@ -312,8 +351,8 @@ contract EtherfunSale is ReentrancyGuard, ERC20 {
         uint256 claimedEth = address(this).balance;
         require(claimedEth > 0, "No ETH claimed");
 
-        uint256 fee1 = claimedEth/2;
-        uint256 fee2 = claimedEth-fee1;
+        uint256 fee1 = claimedEth / 2;
+        uint256 fee2 = claimedEth - fee1;
 
         payable(lockFactoryOwner).transfer(fee1);
         payable(0x4C5fbF8D815379379b3695ba77B5D3f898C1230b).transfer(fee2);
